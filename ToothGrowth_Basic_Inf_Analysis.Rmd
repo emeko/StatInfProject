@@ -1,0 +1,143 @@
+---
+title: "ToothGrowth Dataset, Basic Inferential Data Analysis"
+author: "emeko"
+date: "January 25, 2016"
+output:
+  pdf_document: default
+  html_document:
+    fig_retina: 2
+    fig_width: 6.5
+    keep_md: yes
+---
+
+# Overview
+
+The *ToothGrowth* data set from the R *datasets* package is a dataset of the response in the length of odontoblasts (teeth) in each of 10 guinea pigs at each of three dose levels of Vitamin C (0.5, 1, and 2 mg) with each of two delivery methods (orange juice or ascorbic acid).The data set is provided as a data frame of 60 observations across three variables: length (*len*), supplement (*supp*; a factor that is either 'OJ' for orange juice, or 'VC' for vitamin C (ascorbic acid)), and dose in milligrams (*dose*).
+
+```{r global_options, echo=FALSE}
+# Global Setting
+# Turn off warning and message to supress package warnings and messages from appearing in the report.
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, echo = TRUE)
+```
+
+```{r, echo=FALSE}
+set.seed(66375)
+library(datasets)
+library(ggplot2)
+```
+
+## Basic Exploratory Analysis of the Dataset
+The *summary()* function can provide basic information. We know from the description of the data that the tooth length is a reponse (dependent) variable.
+
+```{r}
+data('ToothGrowth')
+
+summary( ToothGrowth )
+table( ToothGrowth$supp, ToothGrowth$dose )
+```
+
+There are **only 10 data points** for each combination of dose and supplement. For this reason,
+we will use Student's t-statistic when considering the data.
+
+Since there is nothing in the description of the data that suggests that the observations are paired in any way, we  **assume that the obeservations are not paired**.
+
+
+# Supplement Dependence
+
+*QUESTION*: Does the observed amount of tooth growth depend on the type of supplement provided?
+
+Lets consider the data faceted by the supplement:
+
+```{r}
+ggplot(ToothGrowth, aes(x=len, fill=supp)) +
+    geom_histogram( binwidth = 1 ) +
+    facet_grid(supp ~ .)
+```
+
+From the above plot, the distributions look similar save that the ascorbic acid results appear more spread out.
+The difference in spread suggests that the variance for VC-treated cases is greater than for
+the OJ cases:
+
+```{r}
+aggregate( len ~ supp, ToothGrowth, var)
+```
+
+There are large differences in the length variance between the treatments at each dose, which suggests,
+in the absence of any prior knowledge that would suggest otherwise, that we should **not treat the
+variances as equal**.
+
+The question "Does the observed amount of tooth growth depend on the type of supplement provided?"
+suggests a statistical test, where the null-hypothesis ($H_0$) is that the amount of tooth growth is
+the same for VC and OJ treated animals ($\mu_{VC} = \mu_{OJ}$) with 95% confidence. Note that there
+are multiple dose levels, so we'd like to test the hypothesis at each dosage. The alternate hypothesis is $H_a: \mu_{VC} \ne \mu_{OJ}$.
+
+The length means by dosage and supplement:
+
+```{r}
+aggregate( len ~ supp + dose, ToothGrowth, mean)
+```
+
+For $H_0: \mu_{VC} = \mu_{OJ}$ at each dose:
+
+```{r}
+test.results <- by(
+    ToothGrowth,
+    ToothGrowth$dose,
+    function( data ) {
+        t.test( len ~ supp, data, paired = FALSE, var.equal = FALSE )
+    }
+)
+
+test.results
+```
+
+This suggests that at lower doses, we reject the null-hypothesis that true means are equal, but at the
+largest does, we cannot reject the null-hypothesis.
+
+Conclusion: at doses of 0.5 and 1.0 milligrams, Orange Juice is better and ascorbic acid at stimulating
+tooth growth (with P-values of `r test.results[['0.5']]$p.value` and `r test.results[['1']]$p.value`
+repsectively). At 2.0 milligrams, the effect is about the same.
+
+# Supplement Dose
+
+*QUESTION*: Is the observed amount of tooth growth dose dependent?
+
+Lets consider the data faceted by the dose:
+
+```{r}
+ggplot(ToothGrowth, aes(x=len, fill=dose)) +
+    geom_histogram( binwidth = 1 ) +
+    facet_grid(dose ~ .)
+```
+
+Visually, the distributions of dose versus response seem to have very different means and similar
+variance. There isn't a reason to believe that there exists any difference in variance by dose in
+the parent population, so we'll treat the observations as having the same variance.
+
+```{r}
+aggregate( len ~ dose, ToothGrowth, var)
+```
+
+That being the case, we postulate the null-hypothesis ($H_0$) that there's no difference in the means between doses. The alternative hypothesis is $H_a: \mu_{x} \ne \mu_{y}$ $\forall$ $(x, y) \in [ (0.5, 1), (0.5, 2), (1, 2) ]$.
+
+```{r}
+t.test( len ~ dose, subset(ToothGrowth, dose %in% c(0.5, 1)), paired = FALSE)
+t.test( len ~ dose, subset(ToothGrowth, dose %in% c(0.5, 2)), paired = FALSE)
+t.test( len ~ dose, subset(ToothGrowth, dose %in% c(1, 2)), paired = FALSE)
+```
+
+In each of the cases, the means of lengths landed far outside the indicated confidence intervals, and attained a significance level (P-value) of <$1e^{-6}$. Therefore, we can reject the null-hypothesis that the means are equal for the alternative hypothesis that they are not equal.
+
+Conclusion: tooth growth in guinea pigs has a dose-dependent response to vitamin C.
+
+
+## Appendix
+
+1. R libraries used 
+        - datasets, ggplot2
+        
+2. ToothGrowth R documentation - ?ToothGrowth
+        
+3. TeX is required to create the PDF output - You should install a recommended TeX distribution for your platform
+
+4. Source code - https://github.com/emeko/StatInfProject
